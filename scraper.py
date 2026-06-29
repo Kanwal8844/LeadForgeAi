@@ -1,23 +1,37 @@
 import requests
-from bs4 import BeautifulSoup
 import pandas as pd
 
 def run_lead_scraper(business_type, location):
-    data = []
-    # Google Search URL
-    query = f"{business_type} in {location}"
-    url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
+    # Overpass API URL
+    url = "https://overpass-api.de/api/interpreter"
     
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    # Ye Query hai jo city aur business type dhundti hai
+    # 'amenity' ya 'shop' tags use hote hain
+    query = f"""
+    [out:json];
+    area[name="{location}"];
+    (
+      node["amenity"="{business_type}"](area);
+      node["shop"="{business_type}"](area);
+    );
+    out body;
+    """
     
     try:
-        response = requests.get(url, headers=headers)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        # Google search results ke links dhoondna
-        results = soup.select('div.tF2Cxc')
-        for item in results:
-            title = item.select_one('h3').text if item.select_one('h3') else "N/A"
-            data.append({"Business Name": title, "Phone": "N/A", "Address": "N/A", "Website": "N/A"})
-    except:
-        pass
-    return pd.DataFrame(data)
+        response = requests.get(url, params={'data': query})
+        data = response.json()
+        
+        leads = []
+        for element in data.get('elements', []):
+            tags = element.get('tags', {})
+            leads.append({
+                "Business Name": tags.get('name', 'N/A'),
+                "Phone": tags.get('phone', 'N/A'),
+                "Address": tags.get('addr:street', 'N/A'),
+                "Website": tags.get('website', 'N/A')
+            })
+            
+        return pd.DataFrame(leads)
+    except Exception as e:
+        print(f"Error: {e}")
+        return pd.DataFrame()
