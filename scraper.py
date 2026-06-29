@@ -2,17 +2,18 @@ import requests
 import pandas as pd
 
 def run_lead_scraper(business_type, location):
-    # Overpass API URL
+    # Overpass API ka URL
     url = "https://overpass-api.de/api/interpreter"
     
-    # Ye Query hai jo city aur business type dhundti hai
-    # 'amenity' ya 'shop' tags use hote hain
+    # Humne query ko dynamic banaya hai taake har business type ke liye chale
+    # 'craft' aur 'shop' tags mein zyadatar plumbers, electricians, etc mil jate hain
     query = f"""
-    [out:json];
-    area[name="{location}"];
+    [out:json][timeout:25];
+    area[name="{location}"]->.searchArea;
     (
-      node["amenity"="{business_type}"](area);
-      node["shop"="{business_type}"](area);
+      node["craft"="{business_type.lower()}"](area.searchArea);
+      node["shop"="{business_type.lower()}"](area.searchArea);
+      node["amenity"="{business_type.lower()}"](area.searchArea);
     );
     out body;
     """
@@ -24,14 +25,17 @@ def run_lead_scraper(business_type, location):
         leads = []
         for element in data.get('elements', []):
             tags = element.get('tags', {})
-            leads.append({
-                "Business Name": tags.get('name', 'N/A'),
-                "Phone": tags.get('phone', 'N/A'),
-                "Address": tags.get('addr:street', 'N/A'),
-                "Website": tags.get('website', 'N/A')
-            })
-            
+            # Agar naam mil jaye to data list mein daal dein
+            if 'name' in tags:
+                leads.append({
+                    "Business Name": tags.get('name', 'N/A'),
+                    "Phone": tags.get('phone', 'N/A'),
+                    "Address": tags.get('addr:street', 'N/A'),
+                    "Website": tags.get('website', 'N/A')
+                })
+        
         return pd.DataFrame(leads)
+        
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Scraping Error: {e}")
         return pd.DataFrame()
